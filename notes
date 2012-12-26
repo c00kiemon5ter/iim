@@ -1,0 +1,70 @@
+RFC2811 @ https://tools.ietf.org/html/rfc2811
+RFC2812 @ https://tools.ietf.org/html/rfc2812
+RFC2813 @ https://tools.ietf.org/html/rfc2813
+
+HOST
+Servers are uniquely identified by their name, which has a maximum
+length of sixty three (63) characters
+If <hostname> exceeds 63 characters use its numeric address
+
+USER
+Each user is distinguished from other users by a unique nickname
+having a maximum length of nine (9) characters.
+While the maximum length is limited to nine characters, clients
+SHOULD accept longer strings as they may become used in future
+evolutions of the protocol.
+==> freenode allows up to 16 chars for the nickname
+==> oftc allows up to 30 chars for the nickname
+==> use '/version' to see the limits of different vars
+
+CHANNEL
+Channels names are strings of length up to fifty (50) characters
+They behin with a '&', '#', '+' or '!' character
+A channel name SHALL NOT contain any spaces (' '), a control G
+(^G or ASCII 7), a comma (',').
+Channel names are case insensitive
+
+CHARACTERS
+Because of IRC's Scandinavian origin, the characters {}|^ are
+considered to be the lower case equivalents of the characters []\~,
+respectively. This is a critical issue when determining the
+equivalence of two nicknames or channel names.
+
+MESSAGES
+Each IRC message may consist of up to three main parts
+the prefix - optional, the command, and the parameters
+maximum of command parameters is fifteen (15)
+
+IRC messages are always lines of characters terminated with a CR-LF
+(Carriage Return - Line Feed) pair, and these messages SHALL NOT
+exceed 512 characters in length, counting all characters including
+the trailing CR-LF. Thus, there are 510 characters maximum allowed
+for the command and its parameters.  There is no provision for
+continuation of message lines.
+
+BNF Grammar @ https://tools.ietf.org/html/rfc2812#section-2.3.1
+
+REPLIES
+Replies have two representations, numeric and string.
+Numeric replies are three-digit, ranging form 001 to 099.
+A numeric reply is not allowed to originate from a client.
+The server sends Replies 001 to 004 to a user upon successful
+registration.
+==> Wait for any of those before processing any input.
+
+----------------------------------------------------------------------
+  message    =  [ ":" prefix SPACE ] command [ params ] crlf
+  prefix     =  servername / ( nickname [ [ "!" user ] "@" host ] )
+  command    =  1*letter / 3digit
+  params     =  *14( SPACE middle ) [ SPACE ":" trailing ]
+             =/ 14( SPACE middle ) [ SPACE [ ":" ] trailing ]
+
+  nospcrlfcl =  %x01-09 / %x0B-0C / %x0E-1F / %x21-39 / %x3B-FF
+                  ; any octet except NUL, CR, LF, " " and ":"
+  middle     =  nospcrlfcl *( ":" / nospcrlfcl )
+  trailing   =  *( ":" / " " / nospcrlfcl )
+
+  SPACE      =  %x20        ; space character
+  crlf       =  %x0D %x0A   ; "carriage return" "linefeed"
+----------------------------------------------------------------------
+
