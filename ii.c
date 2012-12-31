@@ -179,7 +179,7 @@ static bool add_channel(const char *channel) {
 	if (!(chan = calloc(1, sizeof(struct channel))))
 		err("cannot allocate for channel '%s'\n", channel);
 
-	if ((chan->fd = open_channel(channel)) == -1)
+	if ((chan->fd = open_channel(channame)) == -1)
 		err("cannot open channel fifo '%s'\n", channel);
 
 	snprintf(chan->name, sizeof(chan->name), "%s", channame);
