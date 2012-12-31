@@ -18,3 +18,8 @@ this is a complete rewrite based on the [original ii from suckless.org][oii]
 
   [oii]: http://tools.suckless.org/ii/
 
+build
+-----
+
+    make ii CFLAGS="-std=c99 -Os -Wall -Wextra -pedantic" LDFLAGS="-s"
+
