@@ -64,26 +64,6 @@ static bool read_line(int fd, char *buffer, size_t buffer_len) {
 	return true;
 }
 
-static void write_out(const char *channel, const char *nick, const char *mesg) {
-	FILE *outfile = NULL;
-	char outpath[BUF_PATH_LEN] = OUTFILE;
-
-	char timebuf[strlen("YYYY-MM-DD HH:MM") + 1];
-	const time_t t = time(NULL);
-	strftime(timebuf, sizeof(timebuf), "%F %R", localtime(&t));
-
-	if (*channel != '\0') snprintf(outpath, sizeof(outpath), "%s/%s", channel, OUTFILE);
-	if (!(outfile = fopen(outpath, "a"))) return;
-
-	fprintf(outfile, "%s <%s> %s\n", timebuf, nick, mesg);
-	fclose(outfile);
-}
-
-static bool is_channel(const char *channel) {
-	return *channel == '#' || *channel == '+'
-		|| *channel == '!' || *channel == '&';
-}
-
 static int connect_to_irc(const char *host, const char *port) {
 	int sockfd = 0;
 
@@ -161,6 +141,11 @@ static int open_channel(const char *channel) {
 	return open(infile, O_RDONLY|O_NONBLOCK, 0);
 }
 
+static bool is_channel(const char *channel) {
+	return *channel == '#' || *channel == '+'
+		|| *channel == '!' || *channel == '&';
+}
+
 static bool to_irc_lower(const char *src, char *dst, size_t dst_len) {
 	for (size_t i = 0, len = strlen(src); i < len && i < dst_len - 1; dst[++i] = '\0')
 		switch (src[i]) {
@@ -214,6 +199,22 @@ static void remove_channel(const char *channel) {
 	close(r->fd);
 	*c = r->next;
 	free(r);
+}
+
+static void write_out(const char *channel, const char *nick, const char *mesg) {
+	char timebuf[strlen("YYYY-MM-DD HH:MM") + 1];
+	const time_t t = time(NULL);
+	strftime(timebuf, sizeof(timebuf), "%F %R", localtime(&t));
+
+	char outpath[BUF_PATH_LEN] = OUTFILE;
+	if (*channel != '\0') snprintf(outpath, sizeof(outpath), "%s/%s", channel, OUTFILE);
+
+	FILE *outfile = fopen(outpath, "a");
+	if (!outfile) add_channel(channel);
+	if (!outfile && !(outfile = fopen(outpath, "a"))) return;
+
+	fprintf(outfile, "%s <%s> %s\n", timebuf, nick, mesg);
+	fclose(outfile);
 }
 
 static int handle_raw(__attribute__((unused)) const char *channel, const char *input, char *mesg, const int mesg_len) {
