@@ -127,7 +127,7 @@ static int open_channel(const char *channel) {
 	struct stat st;
 	char infile[BUF_PATH_LEN] = INFILE;
 
-	if (channel && *channel != '\0') {
+	if (channel && *channel) {
 		if (!create_dirtree(channel))
 			err("cannot create channel directory '%s'\n", channel);
 		snprintf(infile, sizeof(infile), "%s/%s", channel, INFILE);
@@ -207,7 +207,7 @@ static void write_out(const char *channel, const char *nick, const char *mesg) {
 	strftime(timebuf, sizeof(timebuf), "%F %R", localtime(&t));
 
 	char outpath[BUF_PATH_LEN] = OUTFILE;
-	if (*channel != '\0') snprintf(outpath, sizeof(outpath), "%s/%s", channel, OUTFILE);
+	if (*channel) snprintf(outpath, sizeof(outpath), "%s/%s", channel, OUTFILE);
 
 	FILE *outfile = fopen(outpath, "a");
 	if (!outfile) add_channel(channel);
@@ -226,15 +226,16 @@ static int handle_priv(const char *channel, const char *input, char *mesg, const
 }
 
 static int handle_away(__attribute__((unused)) const char *channel, const char *params, char *mesg, const int mesg_len) {
-	return (*params == '\0') ? snprintf(mesg, mesg_len, "AWAY\r\n") : snprintf(mesg, mesg_len, "AWAY :%s\r\n", params + 1);
+	return (*params) ? snprintf(mesg, mesg_len, "AWAY :%s\r\n", params + 1) : snprintf(mesg, mesg_len, "AWAY\r\n");
 }
 
 static int handle_nick(__attribute__((unused)) const char *channel, const char *params, char *mesg, const int mesg_len) {
-	return (*params == '\0') ? 0 : snprintf(mesg, mesg_len, "NICK %s\r\n", params + 1);
+	return (*params) ? snprintf(mesg, mesg_len, "NICK %s\r\n", params + 1) : 0;
 }
 
 static int handle_join(__attribute__((unused)) const char *channel, const char *params, char *mesg, const int mesg_len) {
-	if (*params == '\0') return 0;
+	if (!*params) return 0;
+
 	char *msgkey = strchr(params + 1, ' ');
 	if (msgkey) *(msgkey++) = '\0'; else msgkey = "";
 
@@ -246,13 +247,13 @@ static int handle_join(__attribute__((unused)) const char *channel, const char *
 
 static int handle_leave(const char *channel, const char *params, char *mesg, const int mesg_len) {
 	return strcmp(channel, "") == 0 ? 0
-		: (*params == '\0') ? snprintf(mesg, mesg_len, "PART %s\r\n", channel)
+		: (!*params) ? snprintf(mesg, mesg_len, "PART %s\r\n", channel)
 		: snprintf(mesg, mesg_len, "PART %s :%s\r\n", channel, params + 1);
 }
 
 static int handle_topic(const char *channel, const char *params, char *mesg, const int mesg_len) {
-	return (*params == '\0') ? snprintf(mesg, mesg_len, "TOPIC %s\r\n", channel)
-	                         : snprintf(mesg, mesg_len, "TOPIC %s :%s\r\n", channel, params + 1);
+	return (*params) ? snprintf(mesg, mesg_len, "TOPIC %s :%s\r\n", channel, params + 1)
+	                 : snprintf(mesg, mesg_len, "TOPIC %s\r\n", channel);
 }
 
 static int handle_names(const char *channel, __attribute__((unused)) const char *params, char *mesg, const int mesg_len) {
@@ -260,21 +261,21 @@ static int handle_names(const char *channel, __attribute__((unused)) const char 
 }
 
 static int handle_mode(const char *channel, const char *params, char *mesg, const int mesg_len) {
-	return (*params == '\0') ? 0 : snprintf(mesg, mesg_len, "MODE %s %s\r\n", channel, params + 1);
+	return (*params) ? snprintf(mesg, mesg_len, "MODE %s %s\r\n", channel, params + 1) : 0;
 }
 
 static int handle_invit(const char *channel, const char *params, char *mesg, const int mesg_len) {
 	char nick[BUF_NICK_LEN];
-	if (*params == '\0' || !snprintf(nick, sizeof(nick), "%s", params + 1)) return 0;
+	if (!*params || !snprintf(nick, sizeof(nick), "%s", params + 1)) return 0;
 	return snprintf(mesg, mesg_len, "INVITE %s %s\r\n", params + 1, channel);
 }
 
 static int handle_kick(const char *channel, const char *params, char *mesg, const int mesg_len) {
-	return (*params == '\0') ? 0 : snprintf(mesg, mesg_len, "KICK %s %s\r\n", channel, params + 1);
+	return (*params) ? snprintf(mesg, mesg_len, "KICK %s %s\r\n", channel, params + 1) : 0;
 }
 
 static int handle_quit(__attribute__((unused)) const char *channel, const char *params, char *mesg, const int mesg_len) {
-	return (*params == '\0') ? snprintf(mesg, mesg_len, "QUIT\r\n") : snprintf(mesg, mesg_len, "QUIT :%s\r\n", params + 1);
+	return (*params) ? snprintf(mesg, mesg_len, "QUIT :%s\r\n", params + 1) : snprintf(mesg, mesg_len, "QUIT\r\n");
 }
 
 static int (* const cmd_handle[])(const char *channel, const char *params, char *mesg, const int mesg_len) = {
@@ -441,7 +442,7 @@ int main(int argc, char *argv[]) {
 
 						if (*mesg != '\0') {
 							/* it is a message from/to a server */
-							if (!prefix_host) write_out("", SERVER_NICK, mesg);
+							if (!prefix_host || !*params) write_out("", SERVER_NICK, mesg);
 							/* it is a public message from/to a channel */
 							else if (is_channel(params)) write_out(params, prefix, mesg);
 							/* it is a private message from/to a user */
