@@ -206,11 +206,12 @@ static void write_out(const char *channel, const char *nick, const char *mesg) {
 	const time_t t = time(NULL);
 	strftime(timebuf, sizeof(timebuf), "%F %R", localtime(&t));
 
-	char outpath[BUF_PATH_LEN] = OUTFILE;
-	if (*channel) snprintf(outpath, sizeof(outpath), "%s/%s", channel, OUTFILE);
+	char outpath[BUF_PATH_LEN] = OUTFILE, channame[BUF_CHAN_LEN] = "";
+	if (*channel && to_irc_lower(channel, channame, sizeof(channame)))
+		snprintf(outpath, sizeof(outpath), "%s/%s", channame, OUTFILE);
 
 	FILE *outfile = fopen(outpath, "a");
-	if (!outfile) add_channel(channel);
+	if (!outfile) add_channel(channame);
 	if (!outfile && !(outfile = fopen(outpath, "a"))) return;
 
 	fprintf(outfile, "%s <%s> %s\n", timebuf, nick, mesg);
