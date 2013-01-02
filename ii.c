@@ -57,11 +57,11 @@ __attribute__((noreturn)) static void err(const char *fmt, ...) {
 
 static bool read_line(int fd, char *buffer, size_t buffer_len) {
 	size_t i = 0;
-	for (char c = buffer[i]; i < buffer_len && c != '\n' && c != EOF; buffer[i++] = c)
+	for (char c = buffer[i]; i < buffer_len && c != '\n'; buffer[i++] = c)
 		if (read(fd, &c, 1) != 1) return false;
 	if (buffer[i - 1] == '\n') buffer[i - 1] = '\0';
 	if (buffer[i - 2] == '\r') buffer[i - 2] = '\0';
-	return true;
+	return i > 0;
 }
 
 static int connect_to_irc(const char *host, const char *port) {
