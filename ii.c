@@ -375,9 +375,6 @@ int main(int argc, char *argv[]) {
 						if (errno != EBADF) close(ircfd);
 						err("remote host closed connection\n");
 					} else {
-						// FIXME debug
-						printf("\nircfd input '%s'\n", input);
-
 						/* ** parse irc grammar ** */
 						char *prefix = NULL, *prefix_user = NULL, *command = NULL;
 						char *params = NULL, *prefix_host = NULL, *trailing = NULL;
@@ -430,16 +427,6 @@ int main(int argc, char *argv[]) {
 							*mesg = '\0'; /* do not write pong messages to out file */
 						} else if (trailing) snprintf(mesg, sizeof(mesg), "%s%s", middle ? middle : "", trailing);
 
-						// FIXME debug
-						printf("ircfd pref '%s'\n", prefix);
-						printf("ircfd host '%s'\n", prefix_host);
-						printf("ircfd user '%s'\n", prefix_user);
-						printf("ircfd comm '%s'\n", command);
-						printf("ircfd para '%s'\n", params);
-						printf("ircfd midd '%s'\n", middle);
-						printf("ircfd tail '%s'\n", trailing);
-						printf("ircfd mesg '%s'\n", mesg);
-
 						if (*mesg != '\0') {
 							/* it is a message from/to a server */
 							if (!prefix_host || !*params) write_out("", SERVER_NICK, mesg);
@@ -458,9 +445,6 @@ int main(int argc, char *argv[]) {
 					const bool r = read_line(c->fd, input, sizeof(input));
 					unsigned mesg_len = 0, cmd = input[1];
 
-					// FIXME debug
-					printf("\ncfd input '%s'\n", input);
-
 					if (!r) {
 						if (errno != EBADF) close(c->fd);
 						if ((c->fd = open_channel(c->name)) == -1)
@@ -473,9 +457,6 @@ int main(int argc, char *argv[]) {
 					} else {
 						mesg_len = handle_raw(c->name, input, mesg, sizeof(mesg));
 					}
-
-					// FIXME debug
-					printf("cfd mesg '%s'\n", mesg);
 
 					if (sizeof(mesg) <= mesg_len) {
 						mesg[sizeof(mesg) - 2] = '\r';
