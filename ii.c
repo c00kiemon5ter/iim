@@ -270,6 +270,103 @@ static int (* const cmd_handle[])(const char *channel, const char *params, char 
 	['q'] = handle_quit,  ['r'] = handle_raw,   ['t'] = handle_topic, ['u'] = handle_names,
 };
 
+static bool handle_server_output(int ircfd, char *nick) {
+	char input[BUFSIZ] = "";
+
+	if (!read_line(ircfd, input, sizeof(input))) {
+		if (errno != EBADF) close(ircfd);
+		err("remote host closed connection\n");
+	}
+
+	/* ** parse irc grammar ** */
+	char *prefix = NULL, *prefix_user = NULL, *command = NULL;
+	char *params = NULL, *prefix_host = NULL, *trailing = NULL;
+	char *middle = NULL, mesg[BUF_MESG_LEN] = "";
+
+	/* prefix always starts with ':' else the first word is a command */
+	if (*input == ':') prefix = input + 1; else command = input;
+	/* if prefix was there then command is the second word */
+	if (prefix && (command = strchr(input, ' '))) *(command++) = '\0';
+	/* prefix may contain the [!user]@host */
+	if (prefix      && (prefix_host = strchr(prefix, '@'))) *(prefix_host++) = '\0';
+	if (prefix_host && (prefix_user = strchr(prefix, '!'))) *(prefix_user++) = '\0';
+	/* params is the optional string following the command */
+	if (command && (params = strchr(command, ' '))) *(params++) = '\0';
+	/* get only the first word from params - rest is middle */
+	if ((middle = params) && *params != ':' && (middle = strchr(params, ' '))) *(middle++) = '\0';
+	/* params/middle may containg the trailing string which always starts with ':' */
+	if (middle && (trailing = strchr(middle, ':'))) *(trailing++) = '\0';
+
+	/* ** handle command ** */
+	if (!command || strcmp("PONG", command) == 0) {
+		; /* empty - do nothing - skip */
+	} else if (strcmp("ERROR", command) == 0) {
+		snprintf(mesg, sizeof(mesg), "error: %s", trailing);
+	} else if (strcmp("TOPIC", command) == 0) {
+		snprintf(mesg, sizeof(mesg), "%s changed topic to: %s", prefix, trailing);
+	} else if (strcmp("MODE",  command) == 0) {
+		snprintf(mesg, sizeof(mesg), "%s changed mode to: %s", prefix, trailing ? trailing : middle);
+	} else if (strcmp("KICK",  command) == 0) {
+		*(trailing - 2) = '\0'; /* remove trailing space from nickname */
+		snprintf(mesg, sizeof(mesg), "%s has kicked %s from %s (%s)", prefix, middle, params, trailing);
+		if (strcmp(nick, middle) == 0) remove_channel(params);
+	} else if (strcmp("PART",  command) == 0) {
+		snprintf(mesg, sizeof(mesg), "%s has parted %s (%s)", prefix, params, trailing ? trailing : "");
+		if (strcmp(nick, prefix) == 0) remove_channel(params);
+	} else if (strcmp("JOIN",  command) == 0) {
+		snprintf(mesg, sizeof(mesg), "%s has joined %s", prefix, params);
+		add_channel(params);
+	} else if (strcmp("QUIT",  command) == 0) {
+		snprintf(mesg, sizeof(mesg), "%s has quit (%s)", prefix, trailing);
+	} else if (strcmp("NICK",  command) == 0) {
+		snprintf(mesg, sizeof(mesg), "%s changed nick to: %s", prefix, trailing);
+		if (strcmp(nick, prefix) == 0) snprintf(nick, sizeof(nick), "%s", trailing);
+	} else if (strcmp("PRIVMSG", command) == 0) {
+		snprintf(mesg, sizeof(mesg), "%s", trailing);
+	} else if (strcmp("PING", command) == 0) {
+		const int mesg_len = snprintf(mesg, sizeof(mesg), "PONG %s\r\n", trailing);
+		write(ircfd, mesg, mesg_len);
+		*mesg = '\0'; /* do not write pong messages to out file */
+	} else if (trailing) snprintf(mesg, sizeof(mesg), "%s%s", middle ? middle : "", trailing);
+
+	if (*mesg != '\0') {
+		/* it is a message from/to a server */
+		if (!prefix_host || !*params) write_out("", SERVER_NICK, mesg);
+		/* it is a public message from/to a channel */
+		else if (is_channel(params)) write_out(params, strcmp(nick, prefix) ? prefix : SERVER_NICK, mesg);
+		/* it is a private message from/to a user */
+		else write_out(prefix, prefix, mesg);
+	}
+
+	return strcmp("QUIT",  command) == 0 && strcmp(nick, prefix) != 0;
+}
+
+static void handle_channel_input(int ircfd, struct channel *c, char *nick) {
+	char input[BUFSIZ] = "", mesg[BUF_MESG_LEN] = "";
+	const bool r = read_line(c->fd, input, sizeof(input));
+	unsigned mesg_len = 0, cmd = input[1];
+
+	if (!r) {
+		if (errno != EBADF) close(c->fd);
+		if ((c->fd = open_channel(c->name)) == -1)
+			remove_channel(c->name);
+	} else if (input[0] != '/') {
+		mesg_len = handle_priv(c->name, input, mesg, sizeof(mesg));
+		if (mesg_len) write_out(c->name, nick, input);
+	} else if ((input[2] == ' ' || input[2] == '\0') && cmd < sizeof(cmd_handle) && cmd_handle[cmd]) {
+		mesg_len = cmd_handle[cmd](c->name, input + 2, mesg, sizeof(mesg));
+	} else {
+		mesg_len = handle_raw(c->name, input, mesg, sizeof(mesg));
+	}
+
+	if (sizeof(mesg) <= mesg_len) {
+		mesg[sizeof(mesg) - 2] = '\r';
+		mesg[sizeof(mesg) - 1] = '\n';
+	}
+
+	if (mesg_len > 0) write(ircfd, mesg, mesg_len);
+}
+
 int main(int argc, char *argv[]) {
 	char nick[BUF_NICK_LEN] = "";
 	char pref[BUF_PATH_LEN] = "";
@@ -339,115 +436,22 @@ int main(int argc, char *argv[]) {
 		for (struct channel *c = channels; c; FD_SET(c->fd, &fds), c = c->next)
 			if (maxfd < c->fd) maxfd = c->fd;
 
-		switch (select(maxfd + 1, &fds, 0, 0, &tv)) {
-			case -1:
-				if (errno != EINTR) err("cannot multiplex selected descriptors (max '%d')\n", maxfd);
-				break;
-			case 0:
+		const int r = select(maxfd + 1, &fds, 0, 0, &tv);
+		if (r == -1) {
+			if (errno != EINTR) err("cannot multiplex selected descriptors\n");
+		} else if (r == 0) {
 				if (time(NULL) - last_response >= PING_TMOUT) err("ping timeout\n");
 				char ping_mesg[BUF_MESG_LEN] = "";
 				const int ping_mesg_len = snprintf(ping_mesg, sizeof(ping_mesg), "PING %s\r\n", host);
 				write(ircfd, ping_mesg, ping_mesg_len);
-				break;
-			default:
-				if (FD_ISSET(ircfd, &fds)) {
-					last_response = time(NULL);
+		} else {
+			if (FD_ISSET(ircfd, &fds)) {
+				last_response = time(NULL);
+				running = handle_server_output(ircfd, nick);
+			}
 
-					char input[BUFSIZ] = "";
-					if (!read_line(ircfd, input, sizeof(input))) {
-						if (errno != EBADF) close(ircfd);
-						err("remote host closed connection\n");
-					} else {
-						/* ** parse irc grammar ** */
-						char *prefix = NULL, *prefix_user = NULL, *command = NULL;
-						char *params = NULL, *prefix_host = NULL, *trailing = NULL;
-						char *middle = NULL, mesg[BUF_MESG_LEN] = "";
-
-						/* prefix always starts with ':' else the first word is a command */
-						if (*input == ':') prefix = input + 1; else command = input;
-						/* if prefix was there then command is the second word */
-						if (prefix && (command = strchr(input, ' '))) *(command++) = '\0';
-						/* prefix may contain the [!user]@host */
-						if (prefix      && (prefix_host = strchr(prefix, '@'))) *(prefix_host++) = '\0';
-						if (prefix_host && (prefix_user = strchr(prefix, '!'))) *(prefix_user++) = '\0';
-						/* params is the optional string following the command */
-						if (command && (params = strchr(command, ' '))) *(params++) = '\0';
-						/* get only the first word from params - rest is middle */
-						if ((middle = params) && *params != ':' && (middle = strchr(params, ' '))) *(middle++) = '\0';
-						/* params/middle may containg the trailing string which always starts with ':' */
-						if (middle && (trailing = strchr(middle, ':'))) *(trailing++) = '\0';
-
-						/* ** handle command ** */
-						if (!command || strcmp("PONG", command) == 0) {
-							; /* empty - do nothing - skip */
-						} else if (strcmp("ERROR", command) == 0) {
-							snprintf(mesg, sizeof(mesg), "error: %s", trailing);
-						} else if (strcmp("TOPIC", command) == 0) {
-							snprintf(mesg, sizeof(mesg), "%s changed topic to: %s", prefix, trailing);
-						} else if (strcmp("MODE",  command) == 0) {
-							snprintf(mesg, sizeof(mesg), "%s changed mode to: %s", prefix, trailing ? trailing : middle);
-						} else if (strcmp("KICK",  command) == 0) {
-							*(trailing - 2) = '\0'; /* remove trailing space from nickname */
-							snprintf(mesg, sizeof(mesg), "%s has kicked %s from %s (%s)", prefix, middle, params, trailing);
-							if (strcmp(nick, middle) == 0) remove_channel(params);
-						} else if (strcmp("PART",  command) == 0) {
-							snprintf(mesg, sizeof(mesg), "%s has parted %s (%s)", prefix, params, trailing ? trailing : "");
-							if (strcmp(nick, prefix) == 0) remove_channel(params);
-						} else if (strcmp("JOIN",  command) == 0) {
-							snprintf(mesg, sizeof(mesg), "%s has joined %s", prefix, params);
-							add_channel(params);
-						} else if (strcmp("QUIT",  command) == 0) {
-							snprintf(mesg, sizeof(mesg), "%s has quit (%s)", prefix, trailing);
-							running = strcmp(nick, prefix) != 0;
-						} else if (strcmp("NICK",  command) == 0) {
-							snprintf(mesg, sizeof(mesg), "%s changed nick to: %s", prefix, trailing);
-							if (strcmp(nick, prefix) == 0) snprintf(nick, sizeof(nick), "%s", trailing);
-						} else if (strcmp("PRIVMSG", command) == 0) {
-							snprintf(mesg, sizeof(mesg), "%s", trailing);
-						} else if (strcmp("PING", command) == 0) {
-							const int mesg_len = snprintf(mesg, sizeof(mesg), "PONG %s\r\n", trailing);
-							write(ircfd, mesg, mesg_len);
-							*mesg = '\0'; /* do not write pong messages to out file */
-						} else if (trailing) snprintf(mesg, sizeof(mesg), "%s%s", middle ? middle : "", trailing);
-
-						if (*mesg != '\0') {
-							/* it is a message from/to a server */
-							if (!prefix_host || !*params) write_out("", SERVER_NICK, mesg);
-							/* it is a public message from/to a channel */
-							else if (is_channel(params)) write_out(params, strcmp(nick, prefix) ? prefix : SERVER_NICK, mesg);
-							/* it is a private message from/to a user */
-							else write_out(prefix, prefix, mesg);
-						}
-					}
-				}
-
-				for (struct channel *c = channels; c; c = c->next) {
-					if(!FD_ISSET(c->fd, &fds)) continue;
-
-					char input[BUFSIZ] = "", mesg[BUF_MESG_LEN] = "";
-					const bool r = read_line(c->fd, input, sizeof(input));
-					unsigned mesg_len = 0, cmd = input[1];
-
-					if (!r) {
-						if (errno != EBADF) close(c->fd);
-						if ((c->fd = open_channel(c->name)) == -1)
-							remove_channel(c->name);
-					} else if (input[0] != '/') {
-						mesg_len = handle_priv(c->name, input, mesg, sizeof(mesg));
-						if (mesg_len) write_out(c->name, nick, input);
-					} else if ((input[2] == ' ' || input[2] == '\0') && cmd < sizeof(cmd_handle) && cmd_handle[cmd] != NULL) {
-						mesg_len = cmd_handle[cmd](c->name, input + 2, mesg, sizeof(mesg));
-					} else {
-						mesg_len = handle_raw(c->name, input, mesg, sizeof(mesg));
-					}
-
-					if (sizeof(mesg) <= mesg_len) {
-						mesg[sizeof(mesg) - 2] = '\r';
-						mesg[sizeof(mesg) - 1] = '\n';
-					}
-
-					if (mesg_len > 0) write(ircfd, mesg, mesg_len);
-				}
+			for (struct channel *c = channels; c; c = c->next)
+				if (FD_ISSET(c->fd, &fds)) handle_channel_input(ircfd, c, nick);
 		}
 	}
 
