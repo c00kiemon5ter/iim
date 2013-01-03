@@ -283,7 +283,7 @@ static bool handle_server_output(void) {
 	/* ** parse irc grammar ** */
 	char *prefix = NULL, *prefix_user = NULL, *command = NULL;
 	char *params = NULL, *prefix_host = NULL, *trailing = NULL;
-	char *middle = NULL, mesg[BUF_MESG_LEN] = "";
+	char *middle = NULL, *nickname = SERVER_NICK, mesg[BUF_MESG_LEN] = "";
 
 	/* prefix always starts with ':' else the first word is a command */
 	if (*input == ':') prefix = input + 1; else command = input;
@@ -328,6 +328,7 @@ static bool handle_server_output(void) {
 		if (strcmp(nick, prefix) == 0) snprintf(nick, sizeof(nick), "%s", trailing);
 	} else if (strcmp("PRIVMSG", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s", trailing);
+		nickname = prefix;
 	} else if (strcmp("PING", command) == 0) {
 		const int mesg_len = snprintf(mesg, sizeof(mesg), "PONG %s\r\n", trailing);
 		write(ircfd, mesg, mesg_len);
@@ -338,9 +339,9 @@ static bool handle_server_output(void) {
 		/* it is a message from/to a server */
 		if (!prefix_host || !*params) write_out("", SERVER_NICK, mesg);
 		/* it is a public message from/to a channel */
-		else if (is_channel(params)) write_out(params, strcmp(nick, prefix) ? prefix : SERVER_NICK, mesg);
+		else if (is_channel(params)) write_out(params, nickname, mesg);
 		/* it is a private message from/to a user */
-		else write_out(prefix, prefix, mesg);
+		else write_out(prefix, nickname, mesg);
 	}
 
 	return !(strcmp("QUIT", command) == 0 && strcmp(nick, prefix) == 0);
