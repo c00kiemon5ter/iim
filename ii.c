@@ -302,6 +302,9 @@ static bool handle_server_output(void) {
 	/* ** handle command ** */
 	if (!command || !*command || strcmp("PONG", command) == 0) {
 		; /* empty - do nothing - skip */
+	} else if (strcmp("001", command) == 0) {
+		/* the nick is what the server finally accepted and registered us with */
+		if (strcmp(nick, params) != 0) snprintf(nick, sizeof(nick), "%s", params);
 	} else if (strcmp("ERROR", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "error: %s", trailing);
 	} else if (strcmp("TOPIC", command) == 0) {
