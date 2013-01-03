@@ -46,6 +46,8 @@ struct channel {
 };
 
 static struct channel *channels;
+static char nick[BUF_NICK_LEN];
+static int ircfd;
 
 __attribute__((noreturn)) static void err(const char *fmt, ...) {
 	va_list ap;
@@ -270,7 +272,7 @@ static int (* const cmd_handle[])(const char *channel, const char *params, char 
 	['q'] = handle_quit,  ['r'] = handle_raw,   ['t'] = handle_topic, ['u'] = handle_names,
 };
 
-static bool handle_server_output(int ircfd, char *nick) {
+static bool handle_server_output(void) {
 	char input[BUFSIZ] = "";
 
 	if (!read_line(ircfd, input, sizeof(input))) {
@@ -338,10 +340,10 @@ static bool handle_server_output(int ircfd, char *nick) {
 		else write_out(prefix, prefix, mesg);
 	}
 
-	return strcmp("QUIT",  command) == 0 && strcmp(nick, prefix) != 0;
+	return strcmp("QUIT",  command) != 0 || strcmp(nick, prefix) != 0;
 }
 
-static void handle_channel_input(int ircfd, struct channel *c, char *nick) {
+static void handle_channel_input(struct channel *c) {
 	char input[BUFSIZ] = "", mesg[BUF_MESG_LEN] = "";
 	const bool r = read_line(c->fd, input, sizeof(input));
 	unsigned mesg_len = 0, cmd = input[1];
@@ -368,7 +370,6 @@ static void handle_channel_input(int ircfd, struct channel *c, char *nick) {
 }
 
 int main(int argc, char *argv[]) {
-	char nick[BUF_NICK_LEN] = "";
 	char pref[BUF_PATH_LEN] = "";
 	char path[BUF_PATH_LEN] = "";
 	char host[BUF_HOST_LEN] = SERVER_HOST;
@@ -414,7 +415,7 @@ int main(int argc, char *argv[]) {
 	 * create main/master/server channel
 	 * identify and auth to services
 	 */
-	const int ircfd = connect_to_irc(host, port);
+	ircfd = connect_to_irc(host, port);
 	if (ircfd <= 0) err("cannot connect to '%s:%s'\n", host, port);
 	if (!add_channel("")) err("cannot create main channel\n");
 	if (!identify(ircfd, pass, nick, name)) err("cannot identify - message cropped.\n");
@@ -447,11 +448,11 @@ int main(int argc, char *argv[]) {
 		} else {
 			if (FD_ISSET(ircfd, &fds)) {
 				last_response = time(NULL);
-				running = handle_server_output(ircfd, nick);
+				running = handle_server_output();
 			}
 
 			for (struct channel *c = channels; c; c = c->next)
-				if (FD_ISSET(c->fd, &fds)) handle_channel_input(ircfd, c, nick);
+				if (FD_ISSET(c->fd, &fds)) handle_channel_input(c);
 		}
 	}
 
