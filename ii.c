@@ -19,6 +19,10 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#define SERVER_NICK "-!-"
+#define SERVER_PORT "6667"
+#define SERVER_HOST "irc.freenode.net"
+
 #define IRCDIR      "irc"
 #define INFILE      "in"
 #define OUTFILE     "out"
@@ -34,10 +38,6 @@
 #define BUF_NICK_LEN 32
 #define BUF_CHAN_LEN 50
 #define BUF_MESG_LEN 512
-
-#define SERVER_NICK "-!-"
-#define SERVER_PORT "6667"
-#define SERVER_HOST "irc.freenode.net"
 
 struct channel {
 	int fd;
