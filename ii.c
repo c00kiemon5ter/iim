@@ -66,29 +66,22 @@ static bool read_line(int fd, char *buffer, size_t buffer_len) {
 
 static int connect_to_irc(const char *host, const char *port) {
 	int sockfd = 0;
-
-	struct addrinfo *res;
-	struct addrinfo hints;
+	struct addrinfo *res, hints;
 
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_family   = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
 
-	if (getaddrinfo(host, port, &hints, &res) != 0)
-		return 0;
+	if (getaddrinfo(host, port, &hints, &res) != 0) return 0;
 
 	for (struct addrinfo *ai = res; ai; ai = ai->ai_next) {
-		if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-			continue;
-		if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0)
-			break;
+		if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) continue;
+		if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0) break;
 		close(sockfd);
 	}
 
-	if (res)
-		freeaddrinfo(res);
-
+	if (res) freeaddrinfo(res);
 	return sockfd;
 }
 
@@ -97,7 +90,6 @@ static bool identify(int ircfd, const char *pass, const char *nick, const char *
 	int len = 0;
 
 	if (pass) len += snprintf(mesg, sizeof(mesg), "PASS %s\r\n", pass);
-
 	len += snprintf(mesg + len, sizeof(mesg) - len, "NICK %s\r\n", nick);
 	len += snprintf(mesg + len, sizeof(mesg) - len, "USER %s 0 * :%s\r\n", nick, name);
 
@@ -127,7 +119,7 @@ static int open_channel(const char *channel) {
 	struct stat st;
 	char infile[BUF_PATH_LEN] = INFILE;
 
-	if (channel && *channel) {
+	if (*channel) {
 		if (!create_dirtree(channel))
 			err("cannot create channel directory '%s'\n", channel);
 		snprintf(infile, sizeof(infile), "%s/%s", channel, INFILE);
@@ -142,20 +134,16 @@ static int open_channel(const char *channel) {
 }
 
 static bool is_channel(const char *channel) {
-	return *channel == '#' || *channel == '+'
-		|| *channel == '!' || *channel == '&';
+	return *channel == '#' || *channel == '+' || *channel == '!' || *channel == '&';
 }
 
 static bool to_irc_lower(const char *src, char *dst, size_t dst_len) {
 	for (size_t i = 0, len = strlen(src); i < len && i < dst_len - 1; dst[++i] = '\0')
 		switch (src[i]) {
-			case '\0': /* NUL */
-			case '': /* BEL */
-			case '\r': /* CR  */
-			case '\n': /* LF  */
-			case ' ' : /* SP  */
-				return false;
-			case ',' : return true;
+			case '\0': /* NUL */ case '': /* BEL */
+			case '\r': /* CR  */ case '\n': /* LF  */
+			case ' ' : /* SP  */ return false;
+			case ',' : return true; /* ignore other channels */
 			case '[' : dst[i] = '{'; break;
 			case ']' : dst[i] = '}'; break;
 			case '\\': dst[i] = '|'; break;
@@ -201,7 +189,7 @@ static void remove_channel(const char *channel) {
 	free(r);
 }
 
-static void write_out(const char *channel, const char *nick, const char *mesg) {
+static void write_out(const char *channel, const char *nickname, const char *mesg) {
 	char timebuf[strlen("YYYY-MM-DD HH:MM") + 1];
 	const time_t t = time(NULL);
 	strftime(timebuf, sizeof(timebuf), "%F %R", localtime(&t));
@@ -214,7 +202,7 @@ static void write_out(const char *channel, const char *nick, const char *mesg) {
 	if (!outfile) add_channel(channame);
 	if (!outfile && !(outfile = fopen(outpath, "a"))) return;
 
-	fprintf(outfile, "%s <%s> %s\n", timebuf, nick, mesg);
+	fprintf(outfile, "%s <%s> %s\n", timebuf, nickname, mesg);
 	fclose(outfile);
 }
 
@@ -247,9 +235,8 @@ static int handle_join(__attribute__((unused)) const char *channel, const char *
 }
 
 static int handle_leave(const char *channel, const char *params, char *mesg, const int mesg_len) {
-	return strcmp(channel, "") == 0 ? 0
-		: (!*params) ? snprintf(mesg, mesg_len, "PART %s\r\n", channel)
-		: snprintf(mesg, mesg_len, "PART %s :%s\r\n", channel, params + 1);
+	return (!*channel) ? 0 : (!*params) ? snprintf(mesg, mesg_len, "PART %s\r\n", channel)
+	                       : snprintf(mesg, mesg_len, "PART %s :%s\r\n", channel, params + 1);
 }
 
 static int handle_topic(const char *channel, const char *params, char *mesg, const int mesg_len) {
@@ -266,9 +253,7 @@ static int handle_mode(const char *channel, const char *params, char *mesg, cons
 }
 
 static int handle_invit(const char *channel, const char *params, char *mesg, const int mesg_len) {
-	char nick[BUF_NICK_LEN];
-	if (!*params || !snprintf(nick, sizeof(nick), "%s", params + 1)) return 0;
-	return snprintf(mesg, mesg_len, "INVITE %s %s\r\n", params + 1, channel);
+	return (*params) ? snprintf(mesg, mesg_len, "INVITE %s %s\r\n", params + 1, channel) : 0;
 }
 
 static int handle_kick(const char *channel, const char *params, char *mesg, const int mesg_len) {
@@ -280,17 +265,16 @@ static int handle_quit(__attribute__((unused)) const char *channel, const char *
 }
 
 static int (* const cmd_handle[])(const char *channel, const char *params, char *mesg, const int mesg_len) = {
-	['a'] = handle_away,  ['t'] = handle_topic,  ['k'] = handle_kick,
-	['n'] = handle_nick,  ['u'] = handle_names,  ['q'] = handle_quit,
-	['j'] = handle_join,  ['l'] = handle_leave,  ['p'] = handle_priv,
-	['m'] = handle_mode,  ['i'] = handle_invit,  ['r'] = handle_raw,
+	['a'] = handle_away,  ['i'] = handle_invit, ['j'] = handle_join,  ['k'] = handle_kick,
+	['l'] = handle_leave, ['m'] = handle_mode,  ['n'] = handle_nick,  ['p'] = handle_priv,
+	['q'] = handle_quit,  ['r'] = handle_raw,   ['t'] = handle_topic, ['u'] = handle_names,
 };
 
 int main(int argc, char *argv[]) {
-	char host[BUF_HOST_LEN] = SERVER_HOST;
 	char nick[BUF_NICK_LEN] = "";
 	char pref[BUF_PATH_LEN] = "";
 	char path[BUF_PATH_LEN] = "";
+	char host[BUF_HOST_LEN] = SERVER_HOST;
 	char *port = SERVER_PORT, *pass = NULL, *name = NULL;
 
 	/* parse args */
@@ -308,14 +292,12 @@ int main(int argc, char *argv[]) {
 
 	/* sanitize args */
 	{
-		const bool p = *pref != '\0';
-		const bool n = *nick != '\0';
-
+		const bool p = *pref != '\0', n = *nick != '\0';
 		if (!p || !n) {
-			struct passwd *pw = getpwuid(getuid());
-			if (!pw) err("failed to get passwd file\n");
-			if (!p)  snprintf(pref, sizeof(pref), "%s/%s", pw->pw_dir, IRCDIR);
-			if (!n)  snprintf(nick, sizeof(nick), "%s", pw->pw_name);
+			struct passwd *s = getpwuid(getuid());
+			if (!s) err("failed to get passwd file\n");
+			if (!p) snprintf(pref, sizeof(pref), "%s/%s", s->pw_dir, IRCDIR);
+			if (!n) snprintf(nick, sizeof(nick), "%s", s->pw_name);
 		}
 
 		if (!name) name = nick;
@@ -469,9 +451,9 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	/* clean up */
 	for (struct channel *next = channels->next; channels; next = (channels = next) ? next->next : NULL) free(channels);
 	if (ircfd) close(ircfd);
-
 	return EXIT_SUCCESS;
 }
 
