@@ -340,7 +340,7 @@ static bool handle_server_output(void) {
 		else write_out(prefix, prefix, mesg);
 	}
 
-	return strcmp("QUIT", command) != 0 || strcmp(nick, prefix) != 0;
+	return !(strcmp("QUIT", command) == 0 && strcmp(nick, prefix) == 0);
 }
 
 static void handle_channel_input(struct channel *c) {
