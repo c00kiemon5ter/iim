@@ -59,10 +59,10 @@ __attribute__((noreturn)) static void err(const char *fmt, ...) {
 
 static bool read_line(int fd, char *buffer, size_t buffer_len) {
 	size_t i = 0;
-	for (char c = buffer[i]; i < buffer_len && c != '\n'; buffer[i++] = c)
+	for (char c = '\0'; i < buffer_len && c != '\n'; buffer[i++] = c)
 		if (read(fd, &c, 1) != 1) return false;
-	if (buffer[i - 1] == '\n') buffer[i - 1] = '\0';
-	if (buffer[i - 2] == '\r') buffer[i - 2] = '\0';
+	if (i > 0 && buffer[i - 1] == '\n') buffer[i - 1] = '\0';
+	if (i > 1 && buffer[i - 2] == '\r') buffer[i - 2] = '\0';
 	return i > 0;
 }
 
@@ -300,7 +300,7 @@ static bool handle_server_output(void) {
 	if (middle && (trailing = strchr(middle, ':'))) *(trailing++) = '\0';
 
 	/* ** handle command ** */
-	if (!command || strcmp("PONG", command) == 0) {
+	if (!command || !*command || strcmp("PONG", command) == 0) {
 		; /* empty - do nothing - skip */
 	} else if (strcmp("ERROR", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "error: %s", trailing);
