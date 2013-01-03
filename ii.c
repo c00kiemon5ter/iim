@@ -432,7 +432,7 @@ int main(int argc, char *argv[]) {
 							/* it is a message from/to a server */
 							if (!prefix_host || !*params) write_out("", SERVER_NICK, mesg);
 							/* it is a public message from/to a channel */
-							else if (is_channel(params)) write_out(params, prefix, mesg);
+							else if (is_channel(params)) write_out(params, strcmp(nick, prefix) ? prefix : SERVER_NICK, mesg);
 							/* it is a private message from/to a user */
 							else write_out(prefix, prefix, mesg);
 						}
