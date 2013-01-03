@@ -306,21 +306,21 @@ static bool handle_server_output(void) {
 		snprintf(mesg, sizeof(mesg), "error: %s", trailing);
 	} else if (strcmp("TOPIC", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s changed topic to: %s", prefix, trailing);
-	} else if (strcmp("MODE",  command) == 0) {
+	} else if (strcmp("MODE", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s changed mode to: %s", prefix, trailing ? trailing : middle);
-	} else if (strcmp("KICK",  command) == 0) {
+	} else if (strcmp("KICK", command) == 0) {
 		*(trailing - 2) = '\0'; /* remove trailing space from nickname */
 		snprintf(mesg, sizeof(mesg), "%s has kicked %s from %s (%s)", prefix, middle, params, trailing);
 		if (strcmp(nick, middle) == 0) remove_channel(params);
-	} else if (strcmp("PART",  command) == 0) {
+	} else if (strcmp("PART", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s has parted %s (%s)", prefix, params, trailing ? trailing : "");
 		if (strcmp(nick, prefix) == 0) remove_channel(params);
-	} else if (strcmp("JOIN",  command) == 0) {
+	} else if (strcmp("JOIN", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s has joined %s", prefix, params);
 		add_channel(params);
-	} else if (strcmp("QUIT",  command) == 0) {
+	} else if (strcmp("QUIT", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s has quit (%s)", prefix, trailing);
-	} else if (strcmp("NICK",  command) == 0) {
+	} else if (strcmp("NICK", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s changed nick to: %s", prefix, trailing);
 		if (strcmp(nick, prefix) == 0) snprintf(nick, sizeof(nick), "%s", trailing);
 	} else if (strcmp("PRIVMSG", command) == 0) {
@@ -340,7 +340,7 @@ static bool handle_server_output(void) {
 		else write_out(prefix, prefix, mesg);
 	}
 
-	return strcmp("QUIT",  command) != 0 || strcmp(nick, prefix) != 0;
+	return strcmp("QUIT", command) != 0 || strcmp(nick, prefix) != 0;
 }
 
 static void handle_channel_input(struct channel *c) {
