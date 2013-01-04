@@ -319,6 +319,7 @@ static bool handle_server_output(void) {
 		snprintf(mesg, sizeof(mesg), "%s has parted %s (%s)", prefix, params, trailing ? trailing : "");
 		if (strcmp(nick, prefix) == 0) remove_channel(params);
 	} else if (strcmp("JOIN", command) == 0) {
+		if (!*params) params = trailing;
 		snprintf(mesg, sizeof(mesg), "%s has joined %s", prefix, params);
 		add_channel(params);
 	} else if (strcmp("QUIT", command) == 0) {
