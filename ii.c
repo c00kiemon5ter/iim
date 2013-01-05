@@ -200,7 +200,6 @@ static void write_out(const char *channel, const char *nickname, const char *mes
 	if (*channel && to_irc_lower(channel, channame, sizeof(channame)))
 		snprintf(outpath, sizeof(outpath), "%s/%s", channame, OUTFILE);
 
-	add_channel(channame);
 	FILE *outfile = fopen(outpath, "a");
 	if (!outfile) return;
 
@@ -334,6 +333,7 @@ static bool handle_server_output(void) {
 	} else if (strcmp("PRIVMSG", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s", trailing);
 		nickname = prefix;
+		if (strcmp(nick, params) == 0) add_channel(prefix);
 	} else if (strcmp("PING", command) == 0) {
 		const int mesg_len = snprintf(mesg, sizeof(mesg), "PONG %s\r\n", trailing);
 		write(ircfd, mesg, mesg_len);
