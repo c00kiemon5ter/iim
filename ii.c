@@ -305,6 +305,10 @@ static bool handle_server_output(void) {
 	} else if (strcmp("001", command) == 0) {
 		/* the nick is what the server finally accepted and registered us with */
 		if (strcmp(nick, params) != 0) snprintf(nick, sizeof(nick), "%s", params);
+	} else if (strcmp("353", command) == 0) {
+		/* this is the reply from a NAMES command */
+		if ((prefix_host = params = strchr(middle, ' ') + 1)) *(trailing - 2) = '\0';
+		snprintf(mesg, sizeof(mesg), "= %s", trailing);
 	} else if (strcmp("ERROR", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "error: %s", trailing);
 	} else if (strcmp("TOPIC", command) == 0) {
