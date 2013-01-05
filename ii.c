@@ -200,9 +200,9 @@ static void write_out(const char *channel, const char *nickname, const char *mes
 	if (*channel && to_irc_lower(channel, channame, sizeof(channame)))
 		snprintf(outpath, sizeof(outpath), "%s/%s", channame, OUTFILE);
 
+	add_channel(channame);
 	FILE *outfile = fopen(outpath, "a");
-	if (!outfile) add_channel(channame);
-	if (!outfile && !(outfile = fopen(outpath, "a"))) return;
+	if (!outfile) return;
 
 	fprintf(outfile, "%s <%s> %s\n", timebuf, nickname, mesg);
 	fclose(outfile);
