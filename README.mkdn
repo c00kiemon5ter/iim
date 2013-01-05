@@ -1,26 +1,85 @@
 
-ii is a minimalist FIFO and filesystem-based IRC client. It creates an irc
-directory tree with server, channel and nick name directories. In every
-directory a FIFO in file and a normal out file is created.
-
-The in file is used to communicate with the servers and the out files contain
-the server messages. For every channel and every nick name there are related in
-and out files created. This allows IRC communication from command line and
-adheres to the Unix philosophy. example
+iim - ii improved
+-----------------
 
 `iim` is as a complete rewrite of the [original ii from suckless.org][ii]
 it started as a cleanup for ii's source code, then added some fixes.
 it ended up smaller, easier to understand and supporting more commands
+
+ii
+--
+
+`ii` is a minimalist FIFO and filesystem-based IRC client. It creates an irc
+directory tree with server, channel and nick name directories. In every
+directory a FIFO _in_ file and a normal _out_ file is created.
+
+The _in_ file is used to communicate with the servers and the _out_ files contain
+the server messages. For every channel and every nick name there are related _in_
+and _out_ files created. This allows IRC communication from command line and
+adheres to the Unix philosophy.
 
   [ii]: http://tools.suckless.org/ii/
 
 build
 -----
 
-    make iim CFLAGS="-std=c99 -Os -Wall -Wextra -pedantic" LDFLAGS="-s"
+	make iim CFLAGS="-std=c99 -Os -Wall -Wextra -pedantic" LDFLAGS="-s"
 
 install
 -------
 
-    sudo install iim /usr/local/bin/
+	sudo install iim /usr/local/bin/
+
+switches
+--------
+
+	-i <path to irc-dir>
+    -s <server-name>
+	-p <server port>
+	-k <enviromental variable holding the server password>
+	-n <user's nickname>
+	-f <user's full/real name>
+
+irc commands
+------------
+
+	/a [away message]
+	set away status
+
+	/i <user>
+	invite user to current channel
+
+	/j <channel|user> [key|message]
+	join channel with given key if needed
+	query user with initial message
+
+	/k <user>
+	kick user from current channel
+
+	/l [message]
+	leave or part current channel with message
+
+	/m <mode>
+	change current channel's mode (mlock)
+
+	/n <nickname>
+	change nickname
+
+	/p <message>
+	send a message to current channel or user
+
+	/q [message]
+	quit server and close connection
+
+	/r <message>
+	send raw irc data
+
+	/t [topic]
+	ask for or change the current channel's topic
+
+	/u
+	retrieve user list in current channel
+
+anything sent prefixed with a slash (`/`) is treated as a command
+for example, `/names #foobar` will send a `NAMES #foobar` command
 
