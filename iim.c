@@ -394,7 +394,7 @@ int main(int argc, char *argv[]) {
 		case 'k': pass = getenv(argv[++i]); break;
 		case 'f': name = argv[++i]; break;
 		case 'p': port = argv[++i]; break;
-		default : err("usage: ii [-i <irc-dir>] [-s <server>] [-p <port>] [-n <nick>] [-k <passwd-env-var>] [-f <fullname>]\n");
+		default : err("usage: iim [-i <irc-dir>] [-s <server>] [-p <port>] [-n <nick>] [-k <passwd-env-var>] [-f <fullname>]\n");
 	}
 
 	/* sanitize args */

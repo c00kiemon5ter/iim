@@ -1,7 +1,4 @@
 
-ii
-==
-
 ii is a minimalist FIFO and filesystem-based IRC client. It creates an irc
 directory tree with server, channel and nick name directories. In every
 directory a FIFO in file and a normal out file is created.
@@ -11,15 +8,19 @@ the server messages. For every channel and every nick name there are related in
 and out files created. This allows IRC communication from command line and
 adheres to the Unix philosophy. example
 
-this repo
----------
+`iim` is as a complete rewrite of the [original ii from suckless.org][ii]
+it started as a cleanup for ii's source code, then added some fixes.
+it ended up smaller, easier to understand and supporting more commands
 
-this is a complete rewrite based on the [original ii from suckless.org][oii]
-
-  [oii]: http://tools.suckless.org/ii/
+  [ii]: http://tools.suckless.org/ii/
 
 build
 -----
 
-    make ii CFLAGS="-std=c99 -Os -Wall -Wextra -pedantic" LDFLAGS="-s"
+    make iim CFLAGS="-std=c99 -Os -Wall -Wextra -pedantic" LDFLAGS="-s"
+
+install
+-------
+
+    sudo install iim /usr/local/bin/
 
