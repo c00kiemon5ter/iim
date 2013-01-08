@@ -70,7 +70,7 @@ static int connect_to_irc(const char *host, const char *port) {
 	int sockfd = 0;
 	struct addrinfo *res, hints;
 
-	memset(&hints, 0, sizeof(struct addrinfo));
+	memset(&hints, 0, sizeof(hints));
 	hints.ai_family   = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
@@ -166,7 +166,7 @@ static bool add_channel(const char *channel) {
 		if (strcmp(chan->name, channame) == 0)
 			return true;
 
-	if (!(chan = calloc(1, sizeof(struct channel))))
+	if (!(chan = calloc(1, sizeof(*chan))))
 		err("cannot allocate for channel '%s'\n", channel);
 
 	if ((chan->fd = open_channel(channame)) == -1)
