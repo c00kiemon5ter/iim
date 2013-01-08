@@ -66,8 +66,8 @@ static bool read_line(int fd, char *buffer, size_t buffer_len) {
 	return i > 0;
 }
 
-static int connect_to_irc(const char *host, const char *port) {
-	int sockfd = 0;
+static bool connect_to_irc(const char *host, const char *port) {
+	bool success = false;
 	struct addrinfo *res, hints;
 
 	memset(&hints, 0, sizeof(hints));
@@ -75,16 +75,16 @@ static int connect_to_irc(const char *host, const char *port) {
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
 
-	if (getaddrinfo(host, port, &hints, &res) != 0) return 0;
+	if (getaddrinfo(host, port, &hints, &res) != 0) return false;
 
 	for (struct addrinfo *ai = res; ai; ai = ai->ai_next) {
-		if ((sockfd = socket(ai->ai_family, ai->ai_socktype, 0)) == -1) continue;
-		if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0) break;
-		close(sockfd);
+		if ((ircfd = socket(ai->ai_family, ai->ai_socktype, 0)) == -1) continue;
+		if ((success = connect(ircfd, res->ai_addr, res->ai_addrlen) == 0)) break;
+		close(ircfd);
 	}
 
 	if (res) freeaddrinfo(res);
-	return sockfd;
+	return success;
 }
 
 static bool identify(int ircfd, const char *pass, const char *nick, const char *name) {
@@ -424,10 +424,9 @@ int main(int argc, char *argv[]) {
 	 * create main/master/server channel
 	 * identify and auth to services
 	 */
-	ircfd = connect_to_irc(host, port);
-	if (ircfd <= 0) err("cannot connect to '%s:%s'\n", host, port);
+	if (!connect_to_irc(host, port)) err("cannot connect to '%s:%s'\n", host, port);
 	if (!add_channel("")) err("cannot create main channel\n");
-	if (!identify(ircfd, pass, nick, name)) err("cannot identify - message cropped.\n");
+	if (!identify(ircfd, pass, nick, name)) err("cannot identify or message cropped\n");
 
 	/*
 	 * listen on the descriptors
