@@ -78,7 +78,7 @@ static int connect_to_irc(const char *host, const char *port) {
 	if (getaddrinfo(host, port, &hints, &res) != 0) return 0;
 
 	for (struct addrinfo *ai = res; ai; ai = ai->ai_next) {
-		if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) continue;
+		if ((sockfd = socket(ai->ai_family, ai->ai_socktype, 0)) == -1) continue;
 		if (connect(sockfd, res->ai_addr, res->ai_addrlen) == 0) break;
 		close(sockfd);
 	}
