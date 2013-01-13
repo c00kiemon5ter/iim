@@ -224,15 +224,16 @@ static int handle_nick(__attribute__((unused)) const char *channel, const char *
 }
 
 static int handle_join(__attribute__((unused)) const char *channel, const char *params, char *mesg, const int mesg_len) {
-	if (!*params) return 0;
+	if (!*params++) return 0;
 
-	char *msgkey = strchr(params + 1, ' ');
-	if (msgkey) *(msgkey++) = '\0'; else msgkey = "";
+	char *msgorkey = strchr(params, ' ');
+	if (msgorkey) *(msgorkey++) = '\0'; else msgorkey = "";
 
-	if (is_channel(params + 1)) return snprintf(mesg, mesg_len, "JOIN %s %s\r\n", params + 1, msgkey);
+	if (is_channel(params)) return snprintf(mesg, mesg_len, "JOIN %s %s\r\n", params, msgorkey);
+	else if (!msgorkey) return 0; else add_channel(params); /* a non-empty message to another user */
 
-	add_channel(params + 1);
-	return (msgkey) ? handle_priv(params + 1, msgkey, mesg, mesg_len) : 0;
+	write_out(params, nick, msgorkey);
+	return handle_priv(params, msgorkey, mesg, mesg_len);
 }
 
 static int handle_leave(const char *channel, const char *params, char *mesg, const int mesg_len) {
