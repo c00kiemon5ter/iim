@@ -155,29 +155,6 @@ static bool to_irc_lower(const char *src, char *dst, size_t dst_len) {
 	return true;
 }
 
-static bool add_channel(const char *channel) {
-	struct channel *chan = NULL;
-	char channame[BUF_CHAN_LEN] = "";
-
-	if (!to_irc_lower(channel, channame, sizeof(channame)))
-		return false;
-
-	for (chan = channels; chan; chan = chan->next)
-		if (strcmp(chan->name, channame) == 0)
-			return true;
-
-	if (!(chan = calloc(1, sizeof(*chan))))
-		err("cannot allocate for channel '%s'\n", channel);
-
-	if ((chan->fd = open_channel(channame)) == -1)
-		err("cannot open channel fifo '%s'\n", channel);
-
-	snprintf(chan->name, sizeof(chan->name), "%s", channame);
-	chan->next = channels;
-	channels = chan;
-	return true;
-}
-
 static void remove_channel(const char *channel) {
 	struct channel **c = &channels, *r = NULL;
 	char channame[BUF_CHAN_LEN] = "";
@@ -189,6 +166,29 @@ static void remove_channel(const char *channel) {
 	close(r->fd);
 	*c = r->next;
 	free(r);
+}
+
+static bool add_channel(const char *channel) {
+	struct channel *chan = NULL;
+	struct stat st;
+	char channame[BUF_CHAN_LEN] = "";
+	bool found = false;
+
+	if (!to_irc_lower(channel, channame, sizeof(channame)))
+		return false;
+
+	for (chan = channels; chan && !(found = strcmp(chan->name, channame) == 0); chan = chan->next);
+
+	if (found) found = stat(channame, &st) == 0 && S_ISDIR(st.st_mode);
+	if (found) return true; else remove_channel(channame);
+
+	if (!(chan = calloc(1, sizeof(*chan)))) err("cannot allocate for channel '%s'\n", channel);
+	if ((chan->fd = open_channel(channame)) == -1) err("cannot open channel fifo '%s'\n", channel);
+
+	snprintf(chan->name, sizeof(chan->name), "%s", channame);
+	chan->next = channels;
+	channels = chan;
+	return true;
 }
 
 static void write_out(const char *channel, const char *nickname, const char *mesg) {
