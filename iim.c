@@ -207,23 +207,34 @@ static void write_out(const char *channel, const char *nickname, const char *mes
 	fclose(outfile);
 }
 
-static int handle_raw(__attribute__((unused)) const char *channel, const char *input, char *mesg, const int mesg_len) {
-	return snprintf(mesg, mesg_len, "%s\r\n", input + 1);
+static int handle_raw(__attribute__((unused)) const char *channel, char *input, char *mesg, const int mesg_len) {
+	char *cmd = input+1, *chn = NULL, *msg = NULL;
+	const int r = snprintf(mesg, mesg_len, "%s\r\n", input+1);
+
+	if (cmd && (chn = strchr(cmd, ' '))) *chn++ = '\0';
+	if (chn && (msg = strchr(chn, ' '))) *msg++ = '\0';
+
+	if (r && cmd && chn && msg && (strcmp("PRIVMSG", cmd) == 0 || strcmp("NOTICE", cmd) == 0))
+		write_out(chn, nick, msg+1);
+
+	return r;
 }
 
-static int handle_priv(const char *channel, const char *input, char *mesg, const int mesg_len) {
-	return snprintf(mesg, mesg_len, "PRIVMSG %s :%s\r\n", channel, input);
+static int handle_priv(const char *channel, char *input, char *mesg, const int mesg_len) {
+	const int r = snprintf(mesg, mesg_len, "PRIVMSG %s :%s\r\n", channel, input);
+	if (r) write_out(channel, nick, input);
+	return r;
 }
 
-static int handle_away(__attribute__((unused)) const char *channel, const char *params, char *mesg, const int mesg_len) {
+static int handle_away(__attribute__((unused)) const char *channel, char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "AWAY :%s\r\n", params + 1) : snprintf(mesg, mesg_len, "AWAY\r\n");
 }
 
-static int handle_nick(__attribute__((unused)) const char *channel, const char *params, char *mesg, const int mesg_len) {
+static int handle_nick(__attribute__((unused)) const char *channel, char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "NICK %s\r\n", params + 1) : 0;
 }
 
-static int handle_join(__attribute__((unused)) const char *channel, const char *params, char *mesg, const int mesg_len) {
+static int handle_join(__attribute__((unused)) const char *channel, char *params, char *mesg, const int mesg_len) {
 	if (!*params++) return 0;
 
 	char *msgorkey = strchr(params, ' ');
@@ -231,42 +242,40 @@ static int handle_join(__attribute__((unused)) const char *channel, const char *
 
 	if (is_channel(params)) return snprintf(mesg, mesg_len, "JOIN %s %s\r\n", params, msgorkey);
 	else if (!msgorkey) return 0; else add_channel(params); /* a non-empty message to another user */
-
-	write_out(params, nick, msgorkey);
 	return handle_priv(params, msgorkey, mesg, mesg_len);
 }
 
-static int handle_leave(const char *channel, const char *params, char *mesg, const int mesg_len) {
+static int handle_leave(const char *channel, char *params, char *mesg, const int mesg_len) {
 	return (!*channel) ? 0 : (!*params) ? snprintf(mesg, mesg_len, "PART %s\r\n", channel)
 	                       : snprintf(mesg, mesg_len, "PART %s :%s\r\n", channel, params + 1);
 }
 
-static int handle_topic(const char *channel, const char *params, char *mesg, const int mesg_len) {
+static int handle_topic(const char *channel, char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "TOPIC %s :%s\r\n", channel, params + 1)
 	                 : snprintf(mesg, mesg_len, "TOPIC %s\r\n", channel);
 }
 
-static int handle_names(const char *channel, __attribute__((unused)) const char *params, char *mesg, const int mesg_len) {
+static int handle_names(const char *channel, __attribute__((unused)) char *params, char *mesg, const int mesg_len) {
 	return snprintf(mesg, mesg_len, "NAMES %s\r\n", channel);
 }
 
-static int handle_mode(const char *channel, const char *params, char *mesg, const int mesg_len) {
+static int handle_mode(const char *channel, char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "MODE %s %s\r\n", channel, params + 1) : 0;
 }
 
-static int handle_invit(const char *channel, const char *params, char *mesg, const int mesg_len) {
+static int handle_invit(const char *channel, char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "INVITE %s %s\r\n", params + 1, channel) : 0;
 }
 
-static int handle_kick(const char *channel, const char *params, char *mesg, const int mesg_len) {
+static int handle_kick(const char *channel, char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "KICK %s %s\r\n", channel, params + 1) : 0;
 }
 
-static int handle_quit(__attribute__((unused)) const char *channel, const char *params, char *mesg, const int mesg_len) {
+static int handle_quit(__attribute__((unused)) const char *channel, char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "QUIT :%s\r\n", params + 1) : snprintf(mesg, mesg_len, "QUIT\r\n");
 }
 
-static int (* const cmd_handle[])(const char *channel, const char *params, char *mesg, const int mesg_len) = {
+static int (* const cmd_handle[])(const char *channel, char *params, char *mesg, const int mesg_len) = {
 	['a'] = handle_away,  ['i'] = handle_invit, ['j'] = handle_join,  ['k'] = handle_kick,
 	['l'] = handle_leave, ['m'] = handle_mode,  ['n'] = handle_nick,  ['p'] = handle_priv,
 	['q'] = handle_quit,  ['r'] = handle_raw,   ['t'] = handle_topic, ['u'] = handle_names,
@@ -364,7 +373,6 @@ static void handle_channel_input(struct channel *c) {
 			remove_channel(c->name);
 	} else if (input[0] != '/') {
 		mesg_len = handle_priv(c->name, input, mesg, sizeof(mesg));
-		if (mesg_len) write_out(c->name, nick, input);
 	} else if ((input[2] == ' ' || input[2] == '\0') && cmd < sizeof(cmd_handle) && cmd_handle[cmd]) {
 		mesg_len = cmd_handle[cmd](c->name, input + 2, mesg, sizeof(mesg));
 	} else {
