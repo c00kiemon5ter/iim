@@ -331,7 +331,7 @@ static bool handle_server_output(void) {
 	} else if (strcmp("NICK", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s changed nick to: %s", prefix, trailing);
 		if (strcmp(nick, prefix) == 0) snprintf(nick, sizeof(nick), "%s", trailing);
-	} else if (strcmp("PRIVMSG", command) == 0) {
+	} else if (strcmp("PRIVMSG", command) == 0 || strcmp("NOTICE", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s", trailing);
 		nickname = prefix;
 		if (strcmp(nick, params) == 0) add_channel(prefix);
