@@ -201,7 +201,7 @@ static void write_out(const char *channel, const char *nickname, const char *mes
 		snprintf(outpath, sizeof(outpath), "%s/%s", channame, OUTFILE);
 
 	FILE *outfile = fopen(outpath, "a");
-	if (!outfile) return;
+	if (!outfile && !(outfile = fopen(OUTFILE, "a"))) return;
 
 	fprintf(outfile, "%s <%s> %s\n", timebuf, nickname, mesg);
 	fclose(outfile);
