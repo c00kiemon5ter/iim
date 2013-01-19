@@ -321,6 +321,9 @@ static bool handle_server_output(void) {
 		snprintf(mesg, sizeof(mesg), "error: %s", trailing);
 	} else if (strcmp("TOPIC", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s changed topic to: %s", prefix, trailing);
+	} else if (strcmp("332", command) == 0) { /* reply from a TOPIC command */
+		if ((prefix_host = params = middle)) *(trailing - 2) = '\0';
+		snprintf(mesg, sizeof(mesg), "%s", trailing);
 	} else if (strcmp("MODE", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s changed mode to: %s", prefix, trailing ? trailing : middle);
 	} else if (strcmp("KICK", command) == 0) {
