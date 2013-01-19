@@ -314,8 +314,7 @@ static bool handle_server_output(void) {
 	} else if (strcmp("001", command) == 0) {
 		/* the nick is what the server finally accepted and registered us with */
 		if (strcmp(nick, params) != 0) snprintf(nick, sizeof(nick), "%s", params);
-	} else if (strcmp("353", command) == 0) {
-		/* this is the reply from a NAMES command */
+	} else if (strcmp("353", command) == 0) { /* reply from a NAMES command */
 		if ((prefix_host = params = strchr(middle, ' ') + 1)) *(trailing - 2) = '\0';
 		snprintf(mesg, sizeof(mesg), "= %s", trailing);
 	} else if (strcmp("ERROR", command) == 0) {
@@ -325,7 +324,7 @@ static bool handle_server_output(void) {
 	} else if (strcmp("MODE", command) == 0) {
 		snprintf(mesg, sizeof(mesg), "%s changed mode to: %s", prefix, trailing ? trailing : middle);
 	} else if (strcmp("KICK", command) == 0) {
-		*(trailing - 2) = '\0'; /* remove trailing space from nickname */
+		if (*(trailing - 2) == ' ') *(trailing - 2) = '\0';
 		snprintf(mesg, sizeof(mesg), "%s has kicked %s from %s (%s)", prefix, middle, params, trailing);
 		if (strcmp(nick, middle) == 0) remove_channel(params);
 	} else if (strcmp("PART", command) == 0) {
