@@ -68,9 +68,8 @@ static bool read_line(int fd, char *buffer, size_t buffer_len) {
 
 static bool connect_to_irc(const char *host, const char *port) {
 	bool success = false;
-	struct addrinfo *res, hints;
+	struct addrinfo *res = NULL, hints = {0};
 
-	memset(&hints, 0, sizeof(hints));
 	hints.ai_family   = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
