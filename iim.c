@@ -191,9 +191,9 @@ static bool add_channel(const char *channel) {
 }
 
 static void write_out(const char *channel, const char *nickname, const char *mesg) {
-	char timebuf[strlen("YYYY-MM-DD HH:MM") + 1];
 	const time_t t = time(NULL);
-	strftime(timebuf, sizeof(timebuf), "%F %R", localtime(&t));
+	char timebuf[strlen("YYYY-MM-DD HH:MM:SS") + 1];
+	strftime(timebuf, sizeof(timebuf), "%F %T", localtime(&t));
 
 	char outpath[BUF_PATH_LEN] = OUTFILE, channame[BUF_CHAN_LEN] = "";
 	if (*channel && to_irc_lower(channel, channame, sizeof(channame)))
