@@ -39,13 +39,12 @@
 #define BUF_CHAN_LEN 50
 #define BUF_MESG_LEN 512
 
-struct channel {
+static struct channel {
 	int fd;
 	char name[BUF_CHAN_LEN];
 	struct channel *next;
-};
+} *channels;
 
-static struct channel *channels;
 static char nick[BUF_NICK_LEN];
 static int ircfd;
 
@@ -67,8 +66,8 @@ static bool read_line(int fd, char *buffer, size_t buffer_len) {
 }
 
 static bool connect_to_irc(const char *host, const char *port) {
-	bool success = false;
 	struct addrinfo *res = NULL, hints = {0};
+	bool success = false;
 
 	hints.ai_family   = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
@@ -90,9 +89,8 @@ static bool identify(int ircfd, const char *pass, const char *nick, const char *
 	char mesg[BUF_MESG_LEN * 3] = "";
 	int len = 0;
 
-	if (pass) len += snprintf(mesg, sizeof(mesg), "PASS %s\r\n", pass);
-	len += snprintf(mesg + len, sizeof(mesg) - len, "NICK %s\r\n", nick);
-	len += snprintf(mesg + len, sizeof(mesg) - len, "USER %s 0 * :%s\r\n", nick, name);
+	if (pass) len += snprintf(mesg, sizeof mesg, "PASS %s\r\n", pass);
+	len += snprintf(mesg + len, sizeof mesg - len, "NICK %s\r\nUSER %s 0 * : %s\r\n", nick, nick, name);
 
 	return len == write(ircfd, mesg, len);
 }
@@ -103,7 +101,7 @@ static bool create_dirtree(const char *path) {
 
 	if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) return true;
 
-	for (int i = 1, len = snprintf(p, sizeof(p), "%s", path); i < len; ++i)
+	for (int i = 1, len = snprintf(p, sizeof p, "%s", path); i < len; ++i)
 		if (p[i] == '/') {
 			p[i] = '\0';
 			if (stat(p, &st) == -1 && mkdir(p, S_IRWXU) == -1)
@@ -123,7 +121,7 @@ static int open_channel(const char *channel) {
 	if (*channel) {
 		if (!create_dirtree(channel))
 			err("cannot create channel directory '%s'\n", channel);
-		snprintf(infile, sizeof(infile), "%s/%s", channel, INFILE);
+		snprintf(infile, sizeof infile, "%s/%s", channel, INFILE);
 	}
 
 	if (stat(infile, &st) == -1 && mkfifo(infile, S_IRWXU) == -1)
@@ -188,7 +186,7 @@ static bool add_channel(char *channame) {
 static void write_out(char *channame, const char *nickname, const char *mesg) {
 	const time_t t = time(NULL);
 	char timebuf[strlen("YYYY-MM-DD HH:MM:SS") + 1];
-	strftime(timebuf, sizeof(timebuf), "%F %T", localtime(&t));
+	strftime(timebuf, sizeof timebuf, "%F %T", localtime(&t));
 
 	char outpath[BUF_PATH_LEN] = OUTFILE;
 	if (*channame && to_irc_lower(channame, strlen(channame)))
@@ -272,7 +270,7 @@ static int handle_quit(char *params, char *mesg, const int mesg_len) {
 static bool handle_server_output(void) {
 	char input[BUFSIZ] = "";
 
-	if (!read_line(ircfd, input, sizeof(input))) {
+	if (!read_line(ircfd, input, sizeof input)) {
 		if (errno != EBADF) close(ircfd);
 		err("remote host closed connection\n");
 	}
@@ -301,44 +299,44 @@ static bool handle_server_output(void) {
 		; /* empty - do nothing - skip */
 	} else if (strcmp("001", command) == 0) {
 		/* the nick is what the server finally accepted and registered us with */
-		if (strcmp(nick, params) != 0) snprintf(nick, sizeof(nick), "%s", params);
+		if (strcmp(nick, params) != 0) snprintf(nick, sizeof nick, "%s", params);
 	} else if (strcmp("353", command) == 0) { /* reply from a NAMES command */
 		if ((prefix_host = params = strchr(middle, ' ') + 1)) *(trailing - 2) = '\0';
-		snprintf(mesg, sizeof(mesg), "= %s", trailing);
+		snprintf(mesg, sizeof mesg, "= %s", trailing);
 	} else if (strcmp("ERROR", command) == 0) {
-		snprintf(mesg, sizeof(mesg), "error: %s", trailing);
+		snprintf(mesg, sizeof mesg, "error: %s", trailing);
 	} else if (strcmp("TOPIC", command) == 0) {
-		snprintf(mesg, sizeof(mesg), "%s changed topic to: %s", prefix, trailing);
+		snprintf(mesg, sizeof mesg, "%s changed topic to: %s", prefix, trailing);
 	} else if (strcmp("332", command) == 0) { /* reply from a TOPIC command */
 		if ((prefix_host = params = middle)) *(trailing - 2) = '\0';
-		snprintf(mesg, sizeof(mesg), "%s", trailing);
+		snprintf(mesg, sizeof mesg, "%s", trailing);
 	} else if (strcmp("MODE", command) == 0) {
-		snprintf(mesg, sizeof(mesg), "%s changed mode to: %s", prefix, trailing ? trailing : middle);
+		snprintf(mesg, sizeof mesg, "%s changed mode to: %s", prefix, trailing ? trailing : middle);
 	} else if (strcmp("KICK", command) == 0) {
 		if (*(trailing - 2) == ' ') *(trailing - 2) = '\0';
-		snprintf(mesg, sizeof(mesg), "%s has kicked %s from %s (%s)", prefix, middle, params, trailing);
+		snprintf(mesg, sizeof mesg, "%s has kicked %s from %s (%s)", prefix, middle, params, trailing);
 		if (strcmp(nick, middle) == 0) remove_channel(params);
 	} else if (strcmp("PART", command) == 0) {
-		snprintf(mesg, sizeof(mesg), "%s has parted %s (%s)", prefix, params, trailing ? trailing : "");
+		snprintf(mesg, sizeof mesg, "%s has parted %s (%s)", prefix, params, trailing ? trailing : "");
 		if (strcmp(nick, prefix) == 0) remove_channel(params);
 	} else if (strcmp("JOIN", command) == 0) {
 		if (!*params) params = trailing;
-		snprintf(mesg, sizeof(mesg), "%s has joined %s", prefix, params);
+		snprintf(mesg, sizeof mesg, "%s has joined %s", prefix, params);
 		add_channel(params);
 	} else if (strcmp("QUIT", command) == 0) {
-		snprintf(mesg, sizeof(mesg), "%s has quit (%s)", prefix, trailing);
+		snprintf(mesg, sizeof mesg, "%s has quit (%s)", prefix, trailing);
 	} else if (strcmp("NICK", command) == 0) {
-		snprintf(mesg, sizeof(mesg), "%s changed nick to: %s", prefix, trailing);
-		if (strcmp(nick, prefix) == 0) snprintf(nick, sizeof(nick), "%s", trailing);
+		snprintf(mesg, sizeof mesg, "%s changed nick to: %s", prefix, trailing);
+		if (strcmp(nick, prefix) == 0) snprintf(nick, sizeof nick, "%s", trailing);
 	} else if (strcmp("PRIVMSG", command) == 0 || strcmp("NOTICE", command) == 0) {
-		snprintf(mesg, sizeof(mesg), "%s", trailing);
+		snprintf(mesg, sizeof mesg, "%s", trailing);
 		nickname = prefix;
 		if (strcmp(nick, params) == 0) add_channel(prefix);
 	} else if (strcmp("PING", command) == 0) {
-		const int mesg_len = snprintf(mesg, sizeof(mesg), "PONG %s\r\n", trailing);
+		const int mesg_len = snprintf(mesg, sizeof mesg, "PONG %s\r\n", trailing);
 		write(ircfd, mesg, mesg_len);
 		*mesg = '\0'; /* do not write pong messages to out file */
-	} else if (trailing) snprintf(mesg, sizeof(mesg), "%s%s", middle ? middle : "", trailing);
+	} else if (trailing) snprintf(mesg, sizeof mesg, "%s%s", middle ? middle : "", trailing);
 
 	if (*mesg != '\0') {
 		/* it is a message from/to a server */
@@ -354,7 +352,7 @@ static bool handle_server_output(void) {
 
 static void handle_channel_input(struct channel *c) {
 	char input[BUFSIZ] = "", mesg[BUF_MESG_LEN] = "";
-	const bool r = read_line(c->fd, input, sizeof(input));
+	const bool r = read_line(c->fd, input, sizeof input);
 	unsigned mesg_len = 0, cmd = input[1];
 
 	if (!r) {
@@ -378,9 +376,9 @@ static void handle_channel_input(struct channel *c) {
 		case 'r': default:   mesg_len = handle_raw(input+2, mesg, sizeof mesg); break;
 	} else mesg_len = handle_raw(input, mesg, sizeof mesg);
 
-	if (sizeof(mesg) <= mesg_len) {
-		mesg[sizeof(mesg) - 2] = '\r';
-		mesg[sizeof(mesg) - 1] = '\n';
+	if (sizeof mesg <= mesg_len) {
+		mesg[sizeof mesg - 2] = '\r';
+		mesg[sizeof mesg - 1] = '\n';
 	}
 
 	if (mesg_len > 0) write(ircfd, mesg, mesg_len);
@@ -396,9 +394,9 @@ int main(int argc, char *argv[]) {
 	if (argc % 2 == 0) err("missing argument for option '%s'\n", argv[argc-1]);
 
 	for (int i = 1; i < argc && argv[i][0] == '-'; ++i) switch (argv[i][1]) {
-		case 's': snprintf(host, sizeof(host), "%s", argv[++i]); break;
-		case 'n': snprintf(nick, sizeof(nick), "%s", argv[++i]); break;
-		case 'i': snprintf(pref, sizeof(pref), "%s", argv[++i]); break;
+		case 's': snprintf(host, sizeof host, "%s", argv[++i]); break;
+		case 'n': snprintf(nick, sizeof nick, "%s", argv[++i]); break;
+		case 'i': snprintf(pref, sizeof pref, "%s", argv[++i]); break;
 		case 'k': pass = getenv(argv[++i]); break;
 		case 'f': name = argv[++i]; break;
 		case 'p': port = argv[++i]; break;
@@ -411,19 +409,16 @@ int main(int argc, char *argv[]) {
 		if (!p || !n) {
 			struct passwd *s = getpwuid(getuid());
 			if (!s) err("failed to get passwd file\n");
-			if (!p) snprintf(pref, sizeof(pref), "%s/%s", s->pw_dir, IRCDIR);
-			if (!n) snprintf(nick, sizeof(nick), "%s", s->pw_name);
+			if (!p) snprintf(pref, sizeof pref, "%s/%s", s->pw_dir, IRCDIR);
+			if (!n) snprintf(nick, sizeof nick, "%s", s->pw_name);
 		}
 
 		if (!name) name = nick;
-
-		size_t len = strlen(pref);
-		while (pref[len - 1] == '/')
-			pref[--len] = '\0';
+		for (size_t len = strlen(pref); pref[len-1] == '/'; pref[--len] = '\0');
 	}
 
 	/* merge prefix and host in a filesystem path and follow it */
-	snprintf(path, sizeof(path), "%s/%s", pref, host);
+	snprintf(path, sizeof path, "%s/%s", pref, host);
 	if (!create_dirtree(path)) err("cannot create main directory '%s'\n", path);
 	if (chdir(path) == -1) err("cannot change working directory to '%s'\n", path);
 
@@ -459,7 +454,7 @@ int main(int argc, char *argv[]) {
 		} else if (r == 0) {
 				if (time(NULL) - last_response >= PING_TMOUT) err("ping timeout\n");
 				char ping_mesg[BUF_MESG_LEN] = "";
-				const int ping_mesg_len = snprintf(ping_mesg, sizeof(ping_mesg), "PING %s\r\n", host);
+				const int ping_mesg_len = snprintf(ping_mesg, sizeof ping_mesg, "PING %s\r\n", host);
 				write(ircfd, ping_mesg, ping_mesg_len);
 		} else {
 			if (FD_ISSET(ircfd, &fds)) {
