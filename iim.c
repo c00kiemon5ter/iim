@@ -201,7 +201,7 @@ static void write_out(char *channame, const char *nickname, const char *mesg) {
 	fclose(outfile);
 }
 
-static int handle_raw(__attribute__((unused)) const char *channel, char *input, char *mesg, const int mesg_len) {
+static int handle_raw(char *input, char *mesg, const int mesg_len) {
 	char *cmd = input+1, *chn = NULL, *msg = NULL;
 	const int r = snprintf(mesg, mesg_len, "%s\r\n", input+1);
 
@@ -214,21 +214,21 @@ static int handle_raw(__attribute__((unused)) const char *channel, char *input, 
 	return r;
 }
 
-static int handle_priv(const char *channel, char *input, char *mesg, const int mesg_len) {
+static int handle_priv(char *channel, char *input, char *mesg, const int mesg_len) {
 	const int r = snprintf(mesg, mesg_len, "PRIVMSG %s :%s\r\n", channel, input);
 	if (r) write_out(channel, nick, input);
 	return r;
 }
 
-static int handle_away(__attribute__((unused)) const char *channel, char *params, char *mesg, const int mesg_len) {
+static int handle_away(char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "AWAY :%s\r\n", params + 1) : snprintf(mesg, mesg_len, "AWAY\r\n");
 }
 
-static int handle_nick(__attribute__((unused)) const char *channel, char *params, char *mesg, const int mesg_len) {
+static int handle_nick(char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "NICK %s\r\n", params + 1) : 0;
 }
 
-static int handle_join(__attribute__((unused)) const char *channel, char *params, char *mesg, const int mesg_len) {
+static int handle_join(char *params, char *mesg, const int mesg_len) {
 	if (!*params++) return 0;
 
 	char *msgorkey = strchr(params, ' ');
@@ -239,41 +239,35 @@ static int handle_join(__attribute__((unused)) const char *channel, char *params
 	return handle_priv(params, msgorkey, mesg, mesg_len);
 }
 
-static int handle_leave(const char *channel, char *params, char *mesg, const int mesg_len) {
+static int handle_leave(char *channel, char *params, char *mesg, const int mesg_len) {
 	return (!*channel) ? 0 : (!*params) ? snprintf(mesg, mesg_len, "PART %s\r\n", channel)
 	                       : snprintf(mesg, mesg_len, "PART %s :%s\r\n", channel, params + 1);
 }
 
-static int handle_topic(const char *channel, char *params, char *mesg, const int mesg_len) {
+static int handle_topic(char *channel, char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "TOPIC %s :%s\r\n", channel, params + 1)
 	                 : snprintf(mesg, mesg_len, "TOPIC %s\r\n", channel);
 }
 
-static int handle_names(const char *channel, __attribute__((unused)) char *params, char *mesg, const int mesg_len) {
+static int handle_names(char *channel, char *mesg, const int mesg_len) {
 	return snprintf(mesg, mesg_len, "NAMES %s\r\n", channel);
 }
 
-static int handle_mode(const char *channel, char *params, char *mesg, const int mesg_len) {
+static int handle_mode(char *channel, char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "MODE %s %s\r\n", channel, params + 1) : 0;
 }
 
-static int handle_invit(const char *channel, char *params, char *mesg, const int mesg_len) {
+static int handle_invit(char *channel, char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "INVITE %s %s\r\n", params + 1, channel) : 0;
 }
 
-static int handle_kick(const char *channel, char *params, char *mesg, const int mesg_len) {
+static int handle_kick(char *channel, char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "KICK %s %s\r\n", channel, params + 1) : 0;
 }
 
-static int handle_quit(__attribute__((unused)) const char *channel, char *params, char *mesg, const int mesg_len) {
+static int handle_quit(char *params, char *mesg, const int mesg_len) {
 	return (*params) ? snprintf(mesg, mesg_len, "QUIT :%s\r\n", params + 1) : snprintf(mesg, mesg_len, "QUIT\r\n");
 }
-
-static int (* const cmd_handle[])(const char *channel, char *params, char *mesg, const int mesg_len) = {
-	['a'] = handle_away,  ['i'] = handle_invit, ['j'] = handle_join,  ['k'] = handle_kick,
-	['l'] = handle_leave, ['m'] = handle_mode,  ['n'] = handle_nick,  ['p'] = handle_priv,
-	['q'] = handle_quit,  ['r'] = handle_raw,   ['t'] = handle_topic, ['u'] = handle_names,
-};
 
 static bool handle_server_output(void) {
 	char input[BUFSIZ] = "";
@@ -368,12 +362,21 @@ static void handle_channel_input(struct channel *c) {
 		if ((c->fd = open_channel(c->name)) == -1)
 			remove_channel(c->name);
 	} else if (input[0] != '/') {
-		mesg_len = handle_priv(c->name, input, mesg, sizeof(mesg));
-	} else if ((input[2] == ' ' || input[2] == '\0') && cmd < sizeof(cmd_handle) && cmd_handle[cmd]) {
-		mesg_len = cmd_handle[cmd](c->name, input + 2, mesg, sizeof(mesg));
-	} else {
-		mesg_len = handle_raw(c->name, input, mesg, sizeof(mesg));
-	}
+		mesg_len = handle_priv(c->name, input, mesg, sizeof mesg);
+	} else if ((input[2] == ' ' || input[2] == '\0')) switch (cmd) {
+		case 'a': mesg_len = handle_away (         input+2, mesg, sizeof mesg); break;
+		case 'j': mesg_len = handle_join (         input+2, mesg, sizeof mesg); break;
+		case 'n': mesg_len = handle_nick (         input+2, mesg, sizeof mesg); break;
+		case 'q': mesg_len = handle_quit (         input+2, mesg, sizeof mesg); break;
+		case 'k': mesg_len = handle_kick (c->name, input+2, mesg, sizeof mesg); break;
+		case 'm': mesg_len = handle_mode (c->name, input+2, mesg, sizeof mesg); break;
+		case 'p': mesg_len = handle_priv (c->name, input+2, mesg, sizeof mesg); break;
+		case 'i': mesg_len = handle_invit(c->name, input+2, mesg, sizeof mesg); break;
+		case 'l': mesg_len = handle_leave(c->name, input+2, mesg, sizeof mesg); break;
+		case 't': mesg_len = handle_topic(c->name, input+2, mesg, sizeof mesg); break;
+		case 'u': mesg_len = handle_names(c->name,          mesg, sizeof mesg); break;
+		case 'r': default:   mesg_len = handle_raw(input+2, mesg, sizeof mesg); break;
+	} else mesg_len = handle_raw(input, mesg, sizeof mesg);
 
 	if (sizeof(mesg) <= mesg_len) {
 		mesg[sizeof(mesg) - 2] = '\r';
