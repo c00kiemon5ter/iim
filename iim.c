@@ -138,66 +138,61 @@ static bool is_channel(const char *channel) {
 	return *channel == '#' || *channel == '+' || *channel == '!' || *channel == '&';
 }
 
-static bool to_irc_lower(const char *src, char *dst, size_t dst_len) {
-	for (size_t i = 0, len = strlen(src); i < len && i < dst_len - 1; dst[++i] = '\0')
-		switch (src[i]) {
-			case '\0': /* NUL */ case '': /* BEL */
-			case '\r': /* CR  */ case '\n': /* LF  */
-			case ' ' : /* SP  */ return false;
-			case ',' : return true; /* ignore other channels */
-			case '[' : dst[i] = '{'; break;
-			case ']' : dst[i] = '}'; break;
-			case '\\': dst[i] = '|'; break;
-			case '~' : dst[i] = '^'; break;
-			default  : dst[i] = tolower(src[i]); break;
-		}
-	return true;
+static char* to_irc_lower(char *str, const size_t len) {
+	for (size_t i = 0; i < len; i++) switch (str[i]) {
+		case '\0': /* NUL */ case ' ' : /* SP  */
+		case '\r': /* CR  */ case '\n': /* LF  */
+		case '': /* BEL */ return NULL;
+		case ',' : i = len;      break;   /* ignore other channels   */
+		case '/' : str[i] = ','; break;   /* cannot be in a filename */
+		case '[' : str[i] = '{'; break;
+		case ']' : str[i] = '}'; break;
+		case '\\': str[i] = '|'; break;
+		case '~' : str[i] = '^'; break;
+		default  : str[i] = tolower(str[i]); break;
+	}
+	return str;
 }
 
-static void remove_channel(const char *channel) {
+static void remove_channel(const char *channame) {
 	struct channel **c = &channels, *r = NULL;
-	char channame[BUF_CHAN_LEN] = "";
 
-	to_irc_lower(channel, channame, sizeof(channame));
 	while ((r = *c) && strcmp(r->name, channame) != 0) c = &(*c)->next;
-	if (!r) return;
+	if (!r) return; /* channel not found */
 
 	close(r->fd);
 	*c = r->next;
 	free(r);
 }
 
-static bool add_channel(const char *channel) {
+static bool add_channel(char *channame) {
 	struct channel *chan = NULL;
 	struct stat st;
-	char channame[BUF_CHAN_LEN] = "";
 	bool found = false;
 
-	if (!to_irc_lower(channel, channame, sizeof(channame)))
-		return false;
-
+	if (!to_irc_lower(channame, strlen(channame))) return false; /* invalid channel name */
 	for (chan = channels; chan && !(found = strcmp(chan->name, channame) == 0); chan = chan->next);
 
 	if (found) found = stat(channame, &st) == 0 && S_ISDIR(st.st_mode);
 	if (found) return true; else remove_channel(channame);
 
-	if (!(chan = calloc(1, sizeof(*chan)))) err("cannot allocate for channel '%s'\n", channel);
-	if ((chan->fd = open_channel(channame)) == -1) err("cannot open channel fifo '%s'\n", channel);
+	if (!(chan = malloc(sizeof *chan))) err("cannot allocate for channel '%s'\n", channame);
+	if ((chan->fd = open_channel(channame)) == -1) err("cannot open channel fifo '%s'\n", channame);
 
-	snprintf(chan->name, sizeof(chan->name), "%s", channame);
+	snprintf(chan->name, sizeof chan->name, "%s", channame);
 	chan->next = channels;
 	channels = chan;
 	return true;
 }
 
-static void write_out(const char *channel, const char *nickname, const char *mesg) {
+static void write_out(char *channame, const char *nickname, const char *mesg) {
 	const time_t t = time(NULL);
 	char timebuf[strlen("YYYY-MM-DD HH:MM:SS") + 1];
 	strftime(timebuf, sizeof(timebuf), "%F %T", localtime(&t));
 
-	char outpath[BUF_PATH_LEN] = OUTFILE, channame[BUF_CHAN_LEN] = "";
-	if (*channel && to_irc_lower(channel, channame, sizeof(channame)))
-		snprintf(outpath, sizeof(outpath), "%s/%s", channame, OUTFILE);
+	char outpath[BUF_PATH_LEN] = OUTFILE;
+	if (*channame && to_irc_lower(channame, strlen(channame)))
+		snprintf(outpath, sizeof outpath, "%s/%s", channame, OUTFILE);
 
 	FILE *outfile = fopen(outpath, "a");
 	if (!outfile && !(outfile = fopen(OUTFILE, "a"))) return;
