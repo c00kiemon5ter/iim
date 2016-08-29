@@ -23,7 +23,7 @@ adheres to the Unix philosophy.
 build
 -----
 
-	make iim CFLAGS="-std=c99 -Os -Wall -Wextra -pedantic" LDFLAGS="-s"
+	make iim CFLAGS="-std=c99 -Os -Wall -Wextra -pedantic"
 
 install
 -------
