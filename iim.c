@@ -445,8 +445,10 @@ int main(int argc, char *argv[]) {
 		FD_ZERO(&fds);
 		FD_SET(ircfd, &fds);
 
-		for (struct channel *c = channels; c; FD_SET(c->fd, &fds), c = c->next)
+		for (struct channel *c = channels; c; c = c->next) {
 			if (maxfd < c->fd) maxfd = c->fd;
+			FD_SET(c->fd, &fds);
+		}
 
 		const int r = select(maxfd + 1, &fds, 0, 0, &tv);
 		if (r == -1) {
